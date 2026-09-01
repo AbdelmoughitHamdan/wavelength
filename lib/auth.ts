@@ -1,12 +1,9 @@
-import { createHash, randomBytes } from "crypto";
-import { NextRequest } from "next/server";
-
-export function newPlayerToken() {
-  return randomBytes(32).toString("hex");
-}
-export function hashToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
-export function getPlayerToken(request: NextRequest, code: string) {
-  return request.cookies.get(`hwdym_${code.toUpperCase()}`)?.value;
+export function safeNextPath(value: string | null | undefined, fallback = "/") {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return fallback;
+  try {
+    const url = new URL(value, "http://localhost");
+    return url.origin === "http://localhost" ? `${url.pathname}${url.search}${url.hash}` : fallback;
+  } catch {
+    return fallback;
+  }
 }

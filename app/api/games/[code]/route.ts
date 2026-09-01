@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGameView } from "../../../../lib/game-service";
-import { getPlayerToken } from "../../../../lib/auth";
+import { getAuthenticatedUser } from "../../../../lib/supabase/server";
 
 export async function GET(request: NextRequest, { params }: { params: { code: string } }) {
   try {
-    const token = getPlayerToken(request, params.code);
-    const view = await getGameView(params.code, token);
+    const view = await getGameView(params.code, await getAuthenticatedUser(request));
     return NextResponse.json(view);
   } catch (error) {
     const status = error instanceof Error && "status" in error ? Number((error as Error & { status: number }).status) : 500;
