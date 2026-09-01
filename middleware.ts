@@ -4,7 +4,9 @@ import { safeNextPath } from "./lib/auth";
 import { getSupabasePublishableKey, getSupabaseUrl } from "./lib/supabase/config";
 
 const isAdminPath = (pathname: string) =>
-  pathname === "/admin/questions" || pathname.startsWith("/admin/questions/") || pathname.startsWith("/api/admin/");
+  pathname === "/admin/questions" ||
+  pathname.startsWith("/admin/questions/") ||
+  (pathname.startsWith("/api/admin/") && pathname !== "/api/admin/gemini-test");
 
 export async function middleware(request: NextRequest) {
   if (isAdminPath(request.nextUrl.pathname)) {

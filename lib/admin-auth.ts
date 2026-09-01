@@ -20,6 +20,12 @@ function safeEqual(left: string, right: string) {
   return timingSafeEqual(a, b);
 }
 
+export function isAdminEmailAllowed(email: string | null | undefined) {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  return configuredEmails().some((candidate) => safeEqual(candidate, normalized));
+}
+
 export function parseBasicCredentials(value: string | null): Credentials | null {
   if (!value?.startsWith("Basic ")) return null;
   try {
