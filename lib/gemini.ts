@@ -1,7 +1,95 @@
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { adminQuestionsSchema, AdminQuestion, generatedQuestionSchema, GeneratedQuestion } from "./validation";
 
-const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+export const GEMINI_MODEL = "gemini-3.5-flash-lite";
+
+const generatedQuestionResponseFormat = {
+  type: "text",
+  mime_type: "application/json",
+  schema: {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        minItems: 3,
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            prompt: { type: "string" },
+            options: {
+              type: "array",
+              minItems: 4,
+              maxItems: 4,
+              items: { type: "string" }
+            }
+          },
+          required: ["prompt", "options"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["questions"],
+    additionalProperties: false
+  }
+} as const;
+
+const adminQuestionResponseFormat = {
+  type: "text",
+  mime_type: "application/json",
+  schema: {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        minItems: 3,
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            prompt: { type: "string" },
+            options: {
+              type: "array",
+              minItems: 4,
+              maxItems: 4,
+              items: { type: "string" }
+            },
+            answerIndex: { type: "integer", minimum: 0, maximum: 3 },
+            explanation: { type: "string" }
+          },
+          required: ["prompt", "options", "answerIndex"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["questions"],
+    additionalProperties: false
+  }
+} as const;
+
+function geminiClient() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("Gemini is not configured.");
+  return new GoogleGenAI({ apiKey: key });
+}
+
+async function createGeminiInteraction(prompt: string, responseFormat: any = generatedQuestionResponseFormat) {
+  const client = geminiClient();
+  return client.interactions.create({
+    model: GEMINI_MODEL,
+    input: prompt,
+    response_format: responseFormat,
+    store: false
+  });
+}
+
+async function geminiText(prompt: string) {
+  const interaction = await createGeminiInteraction(prompt, { type: "text", mime_type: "text/plain" });
+  const text = interaction.output_text?.trim();
+  if (!text) throw new Error("Gemini returned no content.");
+  return text;
+}
 
 function assertDistinct<T extends { prompt: string; options: string[] }>(questions: T[]) {
   const prompts = questions.map((question) => question.prompt.trim().toLocaleLowerCase());
@@ -12,24 +100,16 @@ function assertDistinct<T extends { prompt: string; options: string[] }>(questio
   }
 }
 
-async function requestGemini<T>(prompt: string, schema: z.ZodType<T>): Promise<T> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("Gemini is not configured.");
+async function requestGemini<T>(
+  prompt: string,
+  schema: z.ZodType<T>,
+  responseFormat: any = generatedQuestionResponseFormat
+): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch(`${endpoint}?key=${encodeURIComponent(key)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.9, responseMimeType: "application/json" }
-        }),
-        cache: "no-store"
-      });
-      if (!response.ok) throw new Error(`Gemini returned ${response.status}.`);
-      const payload: unknown = await response.json();
-      const text = (payload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts?.[0]?.text;
+      const interaction = await createGeminiInteraction(prompt, responseFormat);
+      const text = interaction.output_text?.trim();
       if (!text) throw new Error("Gemini returned no content.");
       const parsed = schema.safeParse(JSON.parse(text));
       if (!parsed.success) throw new Error("Gemini returned invalid question JSON.");
@@ -54,7 +134,11 @@ export async function generateAdminQuestions(prompt: string, context?: string, p
   const contextLine = context ? `Use this private duo context only as inspiration; do not repeat or expose it: ${context}` : "";
   const presetLine = preset ? `Style preset: ${preset}.` : "";
   const request = `Create exactly three Wavelength question suggestions based on this admin brief: ${prompt}. ${presetLine} ${contextLine} ${qualityRules} For each question, choose the intended answer index (0 through 3) as your best subjective estimate and optionally add a short explanation (at most 280 characters). Return exactly this shape: {"questions":[{"prompt":"...","options":["...","...","...","..."],"answerIndex":0,"explanation":"..."}]}.`;
-  const result = await requestGemini(request, adminQuestionsSchema);
+  const result = await requestGemini(request, adminQuestionsSchema, adminQuestionResponseFormat);
   assertDistinct(result.questions);
   return result.questions;
+}
+
+export async function generateGeminiText(prompt: string) {
+  return geminiText(prompt);
 }

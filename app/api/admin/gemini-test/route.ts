@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminEmailAllowed } from "../../../../lib/admin-auth";
+import { GEMINI_MODEL, generateGeminiText } from "../../../../lib/gemini";
 import { createRequestSupabaseClient } from "../../../../lib/supabase/server";
 
 const apiBase = "https://generativelanguage.googleapis.com/v1beta/models";
-const modelId = "gemini-2.5-flash-lite";
+const modelId = GEMINI_MODEL;
 
 function geminiError(body: unknown) {
   if (typeof body === "object" && body !== null && "error" in body) {
@@ -71,17 +72,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin authentication required." }, { status: 401 });
   }
 
-  const key = configuredKey();
-  if (!key) return NextResponse.json({ status: null, succeeded: false, error: "Gemini is not configured." });
-
-  const response = await fetch(`${apiBase}/${modelId}:generateContent?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ contents: [{ parts: [{ text: "Say hello" }] }] }),
-    cache: "no-store"
-  });
-  if (response.ok) return NextResponse.json({ status: response.status, succeeded: true });
-
-  const body: unknown = await response.json().catch(() => null);
-  return NextResponse.json({ status: response.status, succeeded: false, error: geminiError(body) });
+  try {
+    await generateGeminiText("Say hello");
+    return NextResponse.json({ status: 200, succeeded: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gemini request failed.";
+    return NextResponse.json({ status: 502, succeeded: false, error: message });
+  }
 }
