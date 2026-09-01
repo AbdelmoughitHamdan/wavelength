@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { adminQuestionsSchema, AdminQuestion, generatedQuestionSchema, GeneratedQuestion } from "./validation";
 
-const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 function assertDistinct<T extends { prompt: string; options: string[] }>(questions: T[]) {
   const prompts = questions.map((question) => question.prompt.trim().toLocaleLowerCase());
