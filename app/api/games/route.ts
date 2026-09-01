@@ -1,18 +1,23 @@
-import { NextResponse } from "next/server";
-import { createGame } from "../../../lib/game-service";
-import { playerNameSchema } from "../../../lib/validation";
+import { NextRequest, NextResponse } from "next/server";
+import { createGame, listGames } from "../../../lib/game-service";
+import { getAuthenticatedUser } from "../../../lib/supabase/server";
 
-export async function POST(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const body: unknown = await request.json();
-    const parsed = playerNameSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: "Enter a name (2–24 characters)." }, { status: 400 });
-    const result = await createGame(parsed.data.name);
-    const response = NextResponse.json({ code: result.code, token: result.token });
-    response.cookies.set(`hwdym_${result.code}`, result.token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 30, path: "/" });
-    return response;
+    return NextResponse.json({ games: await listGames(await getAuthenticatedUser(request)) });
   } catch (error) {
-    console.error("create game failed", error);
-    return NextResponse.json({ error: "We couldn't create a game right now. Try again." }, { status: 500 });
+    const status = error instanceof Error && "status" in error ? Number((error as Error & { status: number }).status) : 500;
+    if (status >= 500) console.error("list games failed", error);
+    return NextResponse.json({ error: status < 500 && error instanceof Error ? error.message : "Unable to load your games." }, { status });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    return NextResponse.json(await createGame(await getAuthenticatedUser(request)));
+  } catch (error) {
+    const status = error instanceof Error && "status" in error ? Number((error as Error & { status: number }).status) : 500;
+    if (status >= 500) console.error("create game failed", error);
+    return NextResponse.json({ error: status < 500 && error instanceof Error ? error.message : "We couldn't create a game right now. Try again." }, { status });
   }
 }

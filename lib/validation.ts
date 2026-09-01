@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const playerNameSchema = z.object({ name: z.string().trim().min(2).max(24) });
+export const authCredentialsSchema = z.object({
+  email: z.string().trim().email().max(255),
+  password: z.string().min(8).max(72)
+});
+export const signUpSchema = authCredentialsSchema.extend({
+  displayName: z.string().trim().min(2).max(24)
+});
 export const choiceSchema = z.object({ questionId: z.string().uuid(), optionId: z.string().uuid() });
 export const predictionsSchema = z.object({ predictions: z.array(choiceSchema).length(3) });
 export const answersSchema = z.object({ answers: z.array(choiceSchema).length(3) });
