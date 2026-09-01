@@ -51,6 +51,7 @@ export default function AdminQuestionsClient() {
   const [preset, setPreset] = useState<Preset>("Random");
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [busy, setBusy] = useState(false);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -105,6 +106,27 @@ export default function AdminQuestionsClient() {
     catch { setError("Clipboard access was blocked. Select the text manually or allow clipboard access."); }
   }
 
+  async function runGeminiDiagnostic() {
+    setError("");
+    setNotice("");
+    setDiagnosticBusy(true);
+    try {
+      const response = await fetch("/api/admin/gemini-test", {
+        method: "POST",
+        credentials: "same-origin"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.succeeded) {
+        throw new Error(data.error || `Diagnostic failed with status ${data.status ?? response.status}.`);
+      }
+      setNotice(`Gemini POST succeeded with HTTP ${data.status}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Gemini diagnostic failed.");
+    } finally {
+      setDiagnosticBusy(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#111827] px-4 py-6 text-slate-100 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-6xl">
@@ -139,6 +161,7 @@ export default function AdminQuestionsClient() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div><h2 className="text-lg font-bold text-white">Review queue</h2><p className="text-xs text-slate-500">Edit every field before approval. Answer notes stay admin-only.</p></div>
               <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={diagnosticBusy} onClick={() => void runGeminiDiagnostic()} className="rounded-md border border-violet-500 px-3 py-2 text-xs font-black text-violet-200 hover:bg-violet-400/10 disabled:opacity-40">{diagnosticBusy ? "Testing..." : "Run Gemini POST test"}</button>
                 <button type="button" disabled={!questions.length} onClick={() => void copy(true)} className="rounded-md border border-slate-600 px-3 py-2 text-xs font-bold text-slate-300 hover:border-cyan-400 hover:text-white disabled:opacity-40">Copy</button>
                 <button type="button" disabled={!questions.length} onClick={() => void copy(false)} className="rounded-md border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40">Copy for Duo</button>
                 <button type="button" disabled={!canSave} onClick={save} className="rounded-md bg-emerald-400 px-3 py-2 text-xs font-black text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Save approved set</button>
